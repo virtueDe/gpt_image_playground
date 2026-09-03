@@ -7,7 +7,8 @@ import ViewportTooltip from './ViewportTooltip'
 import HelpModal from './HelpModal'
 import HistoryModal from './HistoryModal'
 import { useFavoriteCollectionTitle } from './FavoriteCollections'
-import { EditIcon, HelpCircleIcon, HistoryIcon, InstallIcon, SettingsIcon } from './icons'
+import { ChevronLeftIcon, EditIcon, HelpCircleIcon, HistoryIcon, InstallIcon, SettingsIcon } from './icons'
+import { getSub2APIStudioBackPath, SUB2API_STUDIO_MODE } from '../lib/sub2apiStudio'
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
@@ -32,7 +33,7 @@ export default function Header() {
   const activeConversation = agentConversations.find((item) => item.id === activeAgentConversationId)
   const favoriteCollectionTitle = useFavoriteCollectionTitle()
   const showFavoriteCollectionTitle = appMode === 'gallery' && Boolean(activeFavoriteCollectionId)
-  const { hasUpdate, latestRelease, dismiss } = useVersionCheck()
+  const { hasUpdate, latestRelease, dismiss } = useVersionCheck(!SUB2API_STUDIO_MODE)
   const [showHelp, setShowHelp] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isPwaInstalled, setIsPwaInstalled] = useState(isInstalledPwa)
@@ -149,8 +150,21 @@ export default function Header() {
       <header data-no-drag-select className={`safe-area-top fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur border-b border-gray-200 dark:border-white/[0.08] transition-transform duration-300 ease-in-out ${appMode === 'agent' && !agentMobileHeaderVisible ? '-translate-y-full sm:translate-y-0' : 'translate-y-0'}`}>
         <div className="safe-area-x safe-header-inner max-w-7xl mx-auto flex items-center justify-between relative">
           <div className="flex-1 min-w-0 pr-2 flex items-center gap-2">
+            {SUB2API_STUDIO_MODE && (
+              <a
+                href={getSub2APIStudioBackPath()}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.06] dark:hover:text-gray-100"
+              >
+                <ChevronLeftIcon className="h-4 w-4" />
+                <span>主站</span>
+              </a>
+            )}
             <h1 className="inline-flex min-w-0 items-start relative mr-2">
-              {showFavoriteCollectionTitle ? (
+              {SUB2API_STUDIO_MODE ? (
+                <span className="truncate text-[17px] font-bold tracking-tight text-gray-800 dark:text-gray-100 sm:text-lg">
+                  GPT Image Playground
+                </span>
+              ) : showFavoriteCollectionTitle ? (
                 <>
                   <span className="min-w-0 truncate text-[17px] font-bold tracking-tight text-gray-800 dark:text-gray-100 sm:hidden" title={favoriteCollectionTitle}>{favoriteCollectionTitle}</span>
                   <a
@@ -172,7 +186,7 @@ export default function Header() {
                   GPT Image Playground
                 </a>
               )}
-              {hasUpdate && latestRelease && (
+              {!SUB2API_STUDIO_MODE && hasUpdate && latestRelease && (
                 <a
                   href={latestRelease.url}
                   target="_blank"
@@ -243,13 +257,15 @@ export default function Header() {
             >
               画廊
             </button>
-            <button
-              type="button"
-              onClick={() => setAppMode('agent')}
-              className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${appMode === 'agent' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
-            >
-              Agent
-            </button>
+            {!SUB2API_STUDIO_MODE && (
+              <button
+                type="button"
+                onClick={() => setAppMode('agent')}
+                className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${appMode === 'agent' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm font-medium' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
+              >
+                Agent
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {!isPwaInstalled && (
@@ -290,24 +306,26 @@ export default function Header() {
                 操作指南
               </ViewportTooltip>
             </div>
-            <div
-              className="relative"
-              {...settingsTooltip.handlers}
-            >
-              <button
-                onClick={() => setShowSettings(true)}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
-                aria-label="设置"
+            {!SUB2API_STUDIO_MODE && (
+              <div
+                className="relative"
+                {...settingsTooltip.handlers}
               >
-                <SettingsIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              </button>
-              <ViewportTooltip visible={settingsTooltip.visible} className="whitespace-nowrap">
-                设置
-              </ViewportTooltip>
-            </div>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                  aria-label="设置"
+                >
+                  <SettingsIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                </button>
+                <ViewportTooltip visible={settingsTooltip.visible} className="whitespace-nowrap">
+                  设置
+                </ViewportTooltip>
+              </div>
+            )}
           </div>
         </div>
-        <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${appMode === 'gallery' && scrollDirection === 'down' ? 'max-h-0 opacity-0 pb-0' : 'max-h-20 opacity-100 pb-2'}`}>
+        {!SUB2API_STUDIO_MODE && <div className={`safe-area-x sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${appMode === 'gallery' && scrollDirection === 'down' ? 'max-h-0 opacity-0 pb-0' : 'max-h-20 opacity-100 pb-2'}`}>
           <div className="grid grid-cols-2 gap-1 rounded-xl border border-gray-200 dark:border-white/[0.08] bg-gray-100/70 dark:bg-white/[0.04] p-1 mx-2">
             <button
               type="button"
@@ -324,7 +342,7 @@ export default function Header() {
               Agent
             </button>
           </div>
-        </div>
+        </div>}
       </header>
       
       {/* Hint for sliding down */}

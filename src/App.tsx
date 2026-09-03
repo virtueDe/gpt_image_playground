@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { initStore, restoreExplicitPresetConfig, useStore } from './store'
 import { buildSettingsFromUrlParams, clearUrlSettingParams, getExplicitUrlSettingsIds, hasUrlSettingParams } from './lib/urlSettings'
 import { createDefaultOpenAIProfile, hasDefaultPresetConfig, isAgentTextApiProfile, normalizeSettings } from './lib/apiProfiles'
@@ -21,6 +21,13 @@ import ImageContextMenu from './components/ImageContextMenu'
 import SupportPromptModal from './components/SupportPromptModal'
 import { FavoriteCollectionPickerModal, FavoriteCollectionsView, ManageCollectionsModal } from './components/FavoriteCollections'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
+import {
+  buildSub2APIStudioSettings,
+  loadEligibleSub2APIStudioKeys,
+  SUB2API_STUDIO_MODE,
+  Sub2APIStudioAuthError,
+} from './lib/sub2apiStudio'
+import StudioAccessPanel, { type StudioAccessStatus } from './components/StudioAccessPanel'
 
 let defaultConfigImportStarted = false
 
@@ -28,8 +35,31 @@ export default function App() {
   const appMode = useStore((s) => s.appMode)
   const filterFavorite = useStore((s) => s.filterFavorite)
   const activeFavoriteCollectionId = useStore((s) => s.activeFavoriteCollectionId)
+  const [studioStatus, setStudioStatus] = useState<StudioAccessStatus>('loading')
+  const [studioError, setStudioError] = useState('')
   useDockerApiUrlMigrationNotice()
   useGlobalClickSuppression()
+
+  const syncStudioSettings = useCallback(async () => {
+    setStudioStatus('loading')
+    setStudioError('')
+    try {
+      const keys = await loadEligibleSub2APIStudioKeys()
+      const state = useStore.getState()
+      state.setSettings(buildSub2APIStudioSettings(state.settings, keys, window.location.origin))
+      useStore.setState({ appMode: 'gallery' })
+      setStudioStatus(keys.length ? 'ready' : 'empty')
+    } catch (error) {
+      if (error instanceof Sub2APIStudioAuthError) {
+        setStudioStatus('auth')
+        setStudioError(error.message)
+        return
+      }
+      console.error('Failed to load Sub2API Studio settings:', error)
+      setStudioStatus('error')
+      setStudioError(error instanceof Error ? error.message : String(error))
+    }
+  }, [])
 
   useEffect(() => {
     if (defaultConfigImportStarted) return
@@ -65,6 +95,12 @@ export default function App() {
 
     void initStore()
       .then(async () => {
+        if (SUB2API_STUDIO_MODE) {
+          setPresetConfig(null)
+          await syncStudioSettings()
+          return
+        }
+
         const importedSettings = embeddedDefaultConfig || customProviderConfigUrl
           ? await loadDefaultConfig()
           : hasDefaultPresetConfig()
@@ -113,6 +149,12 @@ export default function App() {
         clearAppliedUrlSettings()
       })
       .catch((error) => {
+        if (SUB2API_STUDIO_MODE) {
+          console.error('Failed to initialize Sub2API Studio:', error)
+          setStudioStatus('error')
+          setStudioError(error instanceof Error ? error.message : String(error))
+          return
+        }
         console.warn('Failed to import preset config:', error)
         setPresetConfig(null)
         const state = useStore.getState()
@@ -121,7 +163,7 @@ export default function App() {
           clearAppliedUrlSettings()
         })
       })
-  }, [])
+  }, [syncStudioSettings])
 
   useEffect(() => {
     const preventPageImageDrag = (e: DragEvent) => {
@@ -137,7 +179,9 @@ export default function App() {
   return (
     <>
       <Header />
-      {appMode === 'agent' ? (
+      {SUB2API_STUDIO_MODE && studioStatus !== 'ready' ? (
+        <StudioAccessPanel status={studioStatus} error={studioError} onRetry={syncStudioSettings} />
+      ) : appMode === 'agent' ? (
         <AgentWorkspace />
       ) : (
         <main data-home-main data-drag-select-surface className="pb-48">
@@ -147,17 +191,21 @@ export default function App() {
           </div>
         </main>
       )}
-      <InputBar />
-      <DetailModal />
-      <Lightbox />
-      <SettingsModal />
-      <ConfirmDialog />
-      <SupportPromptModal />
-      <FavoriteCollectionPickerModal />
-      <ManageCollectionsModal />
-      <Toast />
-      <MaskEditorModal />
-      <ImageContextMenu />
+      {(!SUB2API_STUDIO_MODE || studioStatus === 'ready') && (
+        <>
+          <InputBar />
+          <DetailModal />
+          <Lightbox />
+          {!SUB2API_STUDIO_MODE && <SettingsModal />}
+          <ConfirmDialog />
+          <SupportPromptModal />
+          <FavoriteCollectionPickerModal />
+          <ManageCollectionsModal />
+          <Toast />
+          <MaskEditorModal />
+          <ImageContextMenu />
+        </>
+      )}
     </>
   )
 }

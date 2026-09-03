@@ -21,6 +21,8 @@ import ButtonTooltip from './input/buttonTooltip'
 import DragUploadOverlay from './input/dragUploadOverlay'
 import InputBatchBars from './input/inputBatchBars'
 import InputParamsPanel from './input/inputParamsPanel'
+import StudioApiBar from './StudioApiBar'
+import { SUB2API_STUDIO_MODE } from '../lib/sub2apiStudio'
 
 /** API 支持的最大参考图数量 */
 const API_MAX_IMAGES = 16
@@ -1768,6 +1770,8 @@ export default function InputBar() {
               </div>
             )}
           </div>
+
+          {SUB2API_STUDIO_MODE && <StudioApiBar />}
 
           {/* 参数 + 按钮 */}
           <div className="mt-3">

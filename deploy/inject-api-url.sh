@@ -34,6 +34,11 @@ if [ "$PREVENT_PRESET_CONFIG_DELETION" = "true" ]; then
     PRESET_CONFIG_DELETION_PREVENTED=true
 fi
 
+STUDIO_MODE=false
+if [ "$SUB2API_STUDIO_MODE" = "true" ]; then
+    STUDIO_MODE=true
+fi
+
 escape_sed_replacement() {
     printf '%s' "$1" | sed 's/[&|\\]/\\&/g'
 }
@@ -90,6 +95,7 @@ find /usr/share/nginx/html/assets -type f -name "*.js" -exec sed -i "s|__VITE_DO
 find /usr/share/nginx/html/assets -type f -name "*.js" -exec sed -i "s|__VITE_SHOW_PRESET_CONFIG_ONLY_PLACEHOLDER__|$PRESET_CONFIG_ONLY|g" {} +
 find /usr/share/nginx/html/assets -type f -name "*.js" -exec sed -i "s|__VITE_LOCK_PRESET_CONFIG_PARAMS_PLACEHOLDER__|$PRESET_CONFIG_PARAMS_LOCKED|g" {} +
 find /usr/share/nginx/html/assets -type f -name "*.js" -exec sed -i "s|__VITE_PREVENT_PRESET_CONFIG_DELETION_PLACEHOLDER__|$PRESET_CONFIG_DELETION_PREVENTED|g" {} +
+find /usr/share/nginx/html/assets -type f -name "*.js" -exec sed -i "s|__VITE_SUB2API_STUDIO_MODE_PLACEHOLDER__|$STUDIO_MODE|g" {} +
 
 # 检查是否启用了 API 代理
 if [ "$ENABLE_API_PROXY" != "true" ]; then

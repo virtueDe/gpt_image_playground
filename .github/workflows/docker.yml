@@ -12,6 +12,8 @@ permissions:
 jobs:
   docker:
     runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.release_image.outputs.image }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +34,14 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') }}
 
+      - id: release_image
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          version=${GITHUB_REF_NAME#v}
+          echo "image=ghcr.io/${owner}/gpt_image_playground:${version}" >> "$GITHUB_OUTPUT"
+
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -40,3 +50,72 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    name: Deploy Studio to server
+    needs: docker
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.docker.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+      DEPLOY_DIR: ${{ secrets.DEPLOY_DIR || '/opt/proxy/studio' }}
+      DEPLOY_COMPOSE_FILE: ${{ secrets.DEPLOY_COMPOSE_FILE || 'docker-compose.studio.yml' }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      GHCR_DEPLOY_USERNAME: ${{ secrets.GHCR_DEPLOY_USERNAME }}
+      GHCR_DEPLOY_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
+      RELEASE_IMAGE: ${{ needs.docker.outputs.image }}
+    steps:
+      - name: Checkout deployment script
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            deploy/docker-compose.studio.yml
+            deploy/remote-deploy.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          test -n "$DEPLOY_HOST" || { echo "Missing DEPLOY_HOST" >&2; exit 1; }
+          test -n "$DEPLOY_USER" || { echo "Missing DEPLOY_USER" >&2; exit 1; }
+          test -n "$DEPLOY_SSH_KEY" || { echo "Missing DEPLOY_SSH_KEY" >&2; exit 1; }
+          test -n "$DEPLOY_KNOWN_HOSTS" || { echo "Missing DEPLOY_KNOWN_HOSTS" >&2; exit 1; }
+          test -n "$RELEASE_IMAGE" || { echo "Release image output is empty" >&2; exit 1; }
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Install trusted host key
+        shell: bash
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Login to GHCR on server
+        if: ${{ env.GHCR_DEPLOY_TOKEN != '' }}
+        shell: bash
+        run: |
+          remote_login_cmd="docker login ghcr.io --username $(printf '%q' "$GHCR_DEPLOY_USERNAME") --password-stdin"
+          printf '%s' "$GHCR_DEPLOY_TOKEN" | \
+            ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_login_cmd"
+
+      - name: Install Studio compose file
+        shell: bash
+        run: |
+          remote_dir=$(printf '%q' "$DEPLOY_DIR")
+          remote_compose=$(printf '%q' "$DEPLOY_DIR/$DEPLOY_COMPOSE_FILE")
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "mkdir -p -- ${remote_dir} && cat > ${remote_compose}" < deploy/docker-compose.studio.yml
+
+      - name: Deploy image
+        shell: bash
+        run: |
+          remote_args=$(printf '%q ' "$DEPLOY_DIR" "$DEPLOY_COMPOSE_FILE" "$RELEASE_IMAGE")
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash -s -- ${remote_args}" < deploy/remote-deploy.sh

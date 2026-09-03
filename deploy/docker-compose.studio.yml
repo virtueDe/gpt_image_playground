@@ -1,0 +1,9 @@
+services:
+  studio:
+    image: ${STUDIO_IMAGE:?STUDIO_IMAGE is required}
+    container_name: sub2api-studio
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:80"
+    environment:
+      SUB2API_STUDIO_MODE: "true"

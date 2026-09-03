@@ -4,6 +4,7 @@ import { normalizeAgentConversations } from './agentConversationState'
 import { ensureDefaultFavoriteCollection, normalizeFavoriteCollections, resolveDefaultFavoriteCollectionId } from './favoriteState'
 import { cleanStaleAgentInputDrafts, getPersistableAgentInputDrafts, isEmptyAgentInputDraft, normalizeAgentInputDraft, normalizeAgentInputDrafts, normalizeAgentInputDraftsByKey, saveGalleryInputDraft } from './inputDraftState'
 import { getPersistableAgentConversations, stripPersistedAgentConversations } from './agentResponseState'
+import { stripSub2APIStudioProfileKeys } from './sub2apiStudio'
 
 export interface PersistedAppState {
   settings: AppSettings
@@ -88,7 +89,7 @@ function normalizeParams(value: unknown, fallback: TaskParams): TaskParams {
 }
 
 export function createPersistedState(state: PersistedStateSource, includeLegacyAgentConversations = false): PersistedAppState {
-  const settings = normalizeSettings(state.settings)
+  const settings = stripSub2APIStudioProfileKeys(normalizeSettings(state.settings))
   const galleryInputDraft = saveGalleryInputDraft(state)
   return {
     settings,
@@ -138,7 +139,7 @@ export function normalizePersistedState(
 ): PersistedStateMergePlan | null {
   if (!isRecord(persistedState)) return null
 
-  const settings = normalizeSettings(persistedState.settings ?? fallback.settings)
+  const settings = stripSub2APIStudioProfileKeys(normalizeSettings(persistedState.settings ?? fallback.settings))
   const previousPresetConfig = isRecord(persistedState.previousPresetConfig) && Array.isArray(persistedState.previousPresetConfig.profiles)
     ? (() => {
         const normalized = normalizeSettings(persistedState.previousPresetConfig)
