@@ -196,7 +196,7 @@ export default function App() {
           <InputBar />
           <DetailModal />
           <Lightbox />
-          {!SUB2API_STUDIO_MODE && <SettingsModal />}
+          <SettingsModal />
           <ConfirmDialog />
           <SupportPromptModal />
           <FavoriteCollectionPickerModal />
