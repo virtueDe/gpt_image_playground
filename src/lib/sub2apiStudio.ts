@@ -63,11 +63,22 @@ function createStudioProfile(
   apiKey: string,
   origin: string,
 ): ApiProfile {
+  const baseUrl = `${origin.replace(/\/+$/, '')}/v1`
+  const providerDraft = {
+    baseUrl,
+    model: DEFAULT_IMAGES_MODEL,
+    apiMode: 'images' as const,
+    codexCli: false,
+    apiProxy: false,
+    streamImages: false,
+    transparentBackgroundMethod: 'api' as const,
+  }
+
   return {
     id,
     name,
     provider: 'sb2api-async',
-    baseUrl: `${origin.replace(/\/+$/, '')}/v1`,
+    baseUrl,
     apiKey,
     model: DEFAULT_IMAGES_MODEL,
     timeout: DEFAULT_API_TIMEOUT,
@@ -76,6 +87,10 @@ function createStudioProfile(
     apiProxy: false,
     streamImages: false,
     transparentBackgroundMethod: 'api',
+    providerDrafts: {
+      openai: providerDraft,
+      'sb2api-async': providerDraft,
+    },
   }
 }
 
@@ -133,7 +148,7 @@ export function buildSub2APIStudioSettings(
   return normalizeSettings({
     ...current,
     customProviders: [],
-    providerOrder: ['sb2api-async'],
+    providerOrder: ['openai', 'sb2api-async'],
     profiles: studioProfiles,
     activeProfileId,
     agentApiConfigMode: 'off',

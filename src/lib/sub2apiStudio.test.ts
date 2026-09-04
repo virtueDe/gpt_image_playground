@@ -59,6 +59,16 @@ describe('sub2api studio', () => {
       model: 'gpt-image-2',
       apiMode: 'images',
     })
+    expect(settings.profiles[0].providerDrafts?.openai).toMatchObject({
+      baseUrl: 'https://subapi.example.com/v1',
+      model: 'gpt-image-2',
+      apiMode: 'images',
+    })
+    expect(settings.profiles[0].providerDrafts?.['sb2api-async']).toMatchObject({
+      baseUrl: 'https://subapi.example.com/v1',
+      model: 'gpt-image-2',
+      apiMode: 'images',
+    })
   })
 
   it('持久化前移除站内 profile 的原始 Key', () => {
