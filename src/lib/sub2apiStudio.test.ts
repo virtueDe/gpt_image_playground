@@ -32,14 +32,23 @@ describe('sub2api studio', () => {
         key: 'sk-available',
         groupId: 1,
         groupName: '图片组',
+        groupPlatform: 'openai',
+      },
+      {
+        id: 13,
+        name: '错误平台',
+        key: 'sk-wrong-platform',
+        groupId: 3,
+        groupName: 'Gemini 图片组',
+        groupPlatform: 'gemini',
       },
     ])
   })
 
   it('生成锁定的异步生图配置并保留上次选择', () => {
     const eligible = [
-      { id: 11, name: '第一把', key: 'sk-one', groupId: 1, groupName: '图片组' },
-      { id: 16, name: '第二把', key: 'sk-two', groupId: 1, groupName: '图片组' },
+      { id: 11, name: '第一把', key: 'sk-one', groupId: 1, groupName: '图片组', groupPlatform: 'openai' },
+      { id: 16, name: '第二把', key: 'sk-two', groupId: 1, groupName: '图片组', groupPlatform: 'openai' },
     ]
     const settings = buildSub2APIStudioSettings(
       { ...DEFAULT_SETTINGS, activeProfileId: 'sub2api-studio-key-16' },
@@ -74,7 +83,7 @@ describe('sub2api studio', () => {
   it('持久化前移除站内 profile 的原始 Key', () => {
     const settings = buildSub2APIStudioSettings(
       DEFAULT_SETTINGS,
-      [{ id: 11, name: '可用 Key', key: 'sk-secret', groupId: 1, groupName: '图片组' }],
+      [{ id: 11, name: '可用 Key', key: 'sk-secret', groupId: 1, groupName: '图片组', groupPlatform: 'openai' }],
       'https://subapi.example.com',
     )
 

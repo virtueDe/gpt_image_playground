@@ -31,6 +31,7 @@ export interface EligibleSub2APIStudioKey {
   key: string
   groupId: number
   groupName: string
+  groupPlatform: string
 }
 
 export class Sub2APIStudioAuthError extends Error {}
@@ -62,6 +63,7 @@ function createStudioProfile(
   name: string,
   apiKey: string,
   origin: string,
+  platform: string,
 ): ApiProfile {
   const baseUrl = `${origin.replace(/\/+$/, '')}/v1`
   const providerDraft = {
@@ -104,7 +106,7 @@ export function filterEligibleSub2APIKeys(
       .filter((group) => (
         group.status === 'active' &&
         group.allow_image_generation &&
-        (group.platform === 'openai' || group.platform === 'grok')
+        (group.platform === 'openai' || group.platform === 'grok' || group.platform === 'gemini')
       ))
       .map((group) => [group.id, group]),
   )
@@ -123,6 +125,7 @@ export function filterEligibleSub2APIKeys(
       key: key.key,
       groupId: group.id,
       groupName: group.name,
+      groupPlatform: group.platform,
     }]
   })
 }
@@ -137,10 +140,11 @@ export function buildSub2APIStudioSettings(
     `${key.name} · ${key.groupName}`,
     key.key,
     origin,
+    key.groupPlatform,
   ))
   const studioProfiles = profiles.length
     ? profiles
-    : [createStudioProfile(STUDIO_EMPTY_PROFILE_ID, '暂无可用 Key', '', origin)]
+    : [createStudioProfile(STUDIO_EMPTY_PROFILE_ID, '暂无可用 Key', '', origin, 'openai')]
   const activeProfileId = studioProfiles.some((profile) => profile.id === current.activeProfileId)
     ? current.activeProfileId
     : studioProfiles[0].id
