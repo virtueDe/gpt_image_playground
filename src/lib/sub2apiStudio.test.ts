@@ -56,17 +56,17 @@ describe('sub2api studio', () => {
       provider: 'sb2api-async',
       baseUrl: 'https://subapi.example.com/v1',
       apiKey: 'sk-one',
-      model: 'gpt-image-2',
+      model: '',
       apiMode: 'images',
     })
     expect(settings.profiles[0].providerDrafts?.openai).toMatchObject({
       baseUrl: 'https://subapi.example.com/v1',
-      model: 'gpt-image-2',
+      model: '',
       apiMode: 'images',
     })
     expect(settings.profiles[0].providerDrafts?.['sb2api-async']).toMatchObject({
       baseUrl: 'https://subapi.example.com/v1',
-      model: 'gpt-image-2',
+      model: '',
       apiMode: 'images',
     })
   })

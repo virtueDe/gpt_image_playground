@@ -1,5 +1,5 @@
 import type { ApiProfile, AppSettings } from '../types'
-import { DEFAULT_API_TIMEOUT, DEFAULT_IMAGES_MODEL, normalizeSettings } from './apiProfiles'
+import { DEFAULT_API_TIMEOUT, normalizeSettings } from './apiProfiles'
 import { readRuntimeEnv } from './runtimeEnv'
 
 const STUDIO_PROFILE_PREFIX = 'sub2api-studio-key-'
@@ -66,7 +66,7 @@ function createStudioProfile(
   const baseUrl = `${origin.replace(/\/+$/, '')}/v1`
   const providerDraft = {
     baseUrl,
-    model: DEFAULT_IMAGES_MODEL,
+    model: '',
     apiMode: 'images' as const,
     codexCli: false,
     apiProxy: false,
@@ -80,7 +80,7 @@ function createStudioProfile(
     provider: 'sb2api-async',
     baseUrl,
     apiKey,
-    model: DEFAULT_IMAGES_MODEL,
+    model: '',
     timeout: DEFAULT_API_TIMEOUT,
     apiMode: 'images',
     codexCli: false,
@@ -145,7 +145,7 @@ export function buildSub2APIStudioSettings(
     ? current.activeProfileId
     : studioProfiles[0].id
 
-  return normalizeSettings({
+  const normalized = normalizeSettings({
     ...current,
     customProviders: [],
     providerOrder: ['openai', 'sb2api-async'],
@@ -155,6 +155,21 @@ export function buildSub2APIStudioSettings(
     agentTextProfileId: null,
     agentImageProfileId: activeProfileId,
   })
+
+  return {
+    ...normalized,
+    profiles: normalized.profiles.map((profile) => isSub2APIStudioProfile(profile)
+      ? {
+        ...profile,
+        model: '',
+        providerDrafts: {
+          ...profile.providerDrafts,
+          openai: { ...profile.providerDrafts?.openai, model: '' },
+          'sb2api-async': { ...profile.providerDrafts?.['sb2api-async'], model: '' },
+        },
+      }
+      : profile),
+  }
 }
 
 export function stripSub2APIStudioProfileKeys(settings: AppSettings): AppSettings {
