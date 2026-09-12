@@ -5,39 +5,69 @@ description: Use when synchronizing gpt_image_playground with its upstream repos
 
 # GPT Image Playground Upstream Sync
 
-Treat upstream synchronization as a reviewable branch operation. Preserve
-local product behavior, deployment configuration, and user-facing settings.
+Update the fork through a reviewable sync branch. Preserve Studio behavior,
+the custom image, version files, and SSH deployment workflow. Upstream sync,
+merging to `main`, and production release are separate stages.
 
-## Source and branch rules
+## Source selection
 
-1. Confirm which remote is the fork and which is upstream before fetching.
-2. Fetch branches and tags, then require a clean, unambiguous worktree.
-3. Create a dedicated `codex/sync-*` branch from the current synchronized
-   `main`; never merge upstream directly on `main`.
-4. Prefer a verified upstream release tag when the user asks for a version
-   sync. Use upstream `main` only when explicitly requested.
+1. Confirm which remote is the fork and which is upstream; keep upstream
+   push-disabled.
+2. For a version update, prefer the newest verified upstream release tag. Use
+   upstream `main` only when explicitly requested.
+3. Create `codex/sync-<version>` from the current synchronized `main`. Never
+   perform the first upstream merge directly on `main`.
 
-## Review before merge
+## Inspect before merge
 
-1. Compare `src/`, `public/`, `scripts/`, `deploy/`, `.github/workflows/`,
-   `package.json`, and lockfiles for local behavior before merging.
-2. Review API profile contracts, persistence migrations, service worker cache
-   versions, and deployment triggers as shared behavior.
-3. Resolve conflicts by understanding both implementations. Do not apply
-   blanket `ours` or `theirs` resolution.
-4. Recheck version and release files after every upstream merge.
+1. Require a clean, unambiguous worktree. Preserve unrelated files and do not
+   stash, clean, stage, or delete them automatically.
+2. Fetch fork branches, upstream branches, and tags. Require local `main` to
+   fast-forward to `origin/main`; stop on divergence.
+3. Compare `src/`, `public/`, `deploy/`, `.github/workflows/`, `package.json`,
+   `package-lock.json`, and release files against the selected upstream tag.
+4. Inventory fork-only behavior: Studio/sub2api model selection, profile
+   persistence, `deploy/Dockerfile`, `docker-compose.studio.yml`,
+   `remote-deploy.sh`, GHCR image naming, and SSH deployment triggers.
+5. Treat version files and `public/sw.js` cache names as a coordinated change.
+   Do not import upstream release metadata over the Studio version without a
+   version reconciliation plan.
 
-## Verification and integration
+## Merge and verify
 
-1. Run `npm ci`, `npm run build`, `npm test`, and `git diff --check` when the
-   affected files permit; failures block integration unless the user accepts
-   the named risk.
-2. Confirm local features remain reachable, especially Studio/sub2api model
-   selection and API profile persistence.
-3. Push the sync branch for review. Merge into `main` only when explicitly
-   requested.
-4. Synchronizing `main` does not authorize creating or pushing a production
-   release tag.
+1. Merge the verified upstream tag into `codex/sync-*` with an explicit merge
+   commit so the upstream boundary stays visible.
+2. Resolve conflicts by understanding both behaviors. Do not apply blanket
+   `ours` or `theirs` resolution to deployment, API profile, or service-worker
+   files.
+3. Preserve the project image and deployment contract:
+   `ghcr.io/virtuede/gpt_image_playground`,
+   `deploy@186.244.245.86:/opt/proxy/studio`, and the `studio` service.
+4. Run `npm ci`, `npm run build`, `npm test`, and `git diff --check` when the
+   affected files permit. Failed required checks block integration unless the
+   user explicitly accepts the named risk.
+5. Review the full `origin/main..codex/sync-*` diff and confirm Studio model
+   selection and profile persistence remain reachable.
 
-Do not force push, overwrite tags, delete migrations or generated assets, or
-enable unattended auto-merge, auto-tagging, or production deployment.
+## Integrate and release
+
+1. Push the sync branch for review. Merge it to `main` only when explicitly
+   requested and allowed by branch protection.
+2. Syncing or merging `main` does not authorize a production release.
+3. When release is explicitly requested, increment the Studio suffix in
+   `MAJOR.MINOR.PATCH-studio.N`, update package lock, service-worker cache, and
+   `RELEASE.md`, then create and push the annotated `v<version>` tag.
+4. The tag invokes the Docker workflow, which builds and pushes the project's
+   own GHCR image and deploys it to the SSH Studio target. Report image push,
+   remote container health, and `/studio/` HTTP verification separately.
+
+## Automation boundary
+
+Safe automation may fetch upstream, detect a newer release tag, create a sync
+branch, run checks, and open a PR. Do not configure unattended upstream merge,
+conflict resolution, version tagging, image publishing, or production SSH
+deployment.
+
+Stop on remote divergence, missing official tag, unclear version mapping,
+deployment contract changes, failed required checks, missing release secrets,
+or an existing tag. Never force push, replace tags, or skip verification.

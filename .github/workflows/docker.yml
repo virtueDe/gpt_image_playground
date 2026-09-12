@@ -1,4 +1,4 @@
-name: Build and Publish Docker Image
+name: Build and Deploy Studio Image
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/gpt_image_playground
+          images: ghcr.io/virtuede/gpt_image_playground
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -38,9 +38,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
-          owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
           version=${GITHUB_REF_NAME#v}
-          echo "image=ghcr.io/${owner}/gpt_image_playground:${version}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/virtuede/gpt_image_playground:${version}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
         with:
@@ -57,8 +56,8 @@ jobs:
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.docker.result == 'success' }}
     runs-on: ubuntu-latest
     env:
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || '186.244.245.86' }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER || 'deploy' }}
       DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
       DEPLOY_DIR: ${{ secrets.DEPLOY_DIR || '/opt/proxy/studio' }}
       DEPLOY_COMPOSE_FILE: ${{ secrets.DEPLOY_COMPOSE_FILE || 'docker-compose.studio.yml' }}

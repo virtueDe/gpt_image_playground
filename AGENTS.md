@@ -170,6 +170,16 @@ else params = baseParams
 - 更新后全局搜索旧版本号，确认没有遗漏仍需同步的位置；历史发布记录中的旧版本号不需要修改。
 - 发布前运行 `npm run build` 和 `npm test`，并复查最终差异。
 
+### Studio 生产发布
+
+- Studio 生产环境是本项目自己的容器服务，不是 GitHub Pages；默认通过 SSH 部署到 `deploy@186.244.245.86:/opt/proxy/studio`。
+- 版本使用 `MAJOR.MINOR.PATCH-studio.N`，同一基础版本的 Studio 发布递增 `N`，例如 `0.7.8-studio.3` -> `0.7.8-studio.4`。
+- 正式发布必须从干净且已同步的 `main` 创建带注释标签 `v<package.json version>`。推送标签后，`.github/workflows/docker.yml` 构建本项目自己的 `ghcr.io/virtuede/gpt_image_playground:<version>` 镜像，并通过 SSH 更新 Studio 容器。
+- 生产部署目录固定为 `/opt/proxy/studio`，Compose 服务为 `studio`，容器名为 `sub2api-studio`。不得将上游或其他仓库镜像作为本项目生产镜像。
+- GitHub Pages 仅作为手动预览渠道，不属于 Studio 生产发布；不得把 Pages Action 的成功或失败当作服务器部署结果。
+- 发布前必须确认 GitHub Actions secrets `DEPLOY_SSH_KEY`、`DEPLOY_KNOWN_HOSTS`、`GHCR_DEPLOY_USERNAME`、`GHCR_DEPLOY_TOKEN` 已配置，并核对 `DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_DIR` 与实际服务器一致。
+- 生产发布完成后，分别核验 GHCR 镜像标签、服务器容器镜像与运行状态、`/studio/` HTTP 响应；推送标签成功不等于部署成功。
+
 ## 架构约束
 
 - 新增纯函数或工具逻辑时，放 `src/lib/` 而非 `src/store.ts`。store 文件已过大，应只包含 state 定义和 action 入口。
