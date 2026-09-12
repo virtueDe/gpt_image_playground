@@ -65,7 +65,11 @@ function createStudioProfile(
   origin: string,
   platform: string,
 ): ApiProfile {
-  const baseUrl = `${origin.replace(/\/+$/, '')}/v1`
+  // Gemini 使用原始地址，不拼接 /v1
+  const baseUrl = platform === 'gemini'
+    ? origin.replace(/\/+$/, '')
+    : `${origin.replace(/\/+$/, '')}/v1`
+
   const providerDraft = {
     baseUrl,
     model: '',
