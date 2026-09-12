@@ -160,7 +160,8 @@ export async function callGeminiImageApi(
 
   // 构建完整的 API URL
   // sub2api 格式：POST /v1beta/models/{model}:generateContent
-  const baseUrl = profile.baseUrl.trim().replace(/\/+$/, '')
+  // 注意：baseUrl 可能已经包含 /v1，需要移除避免重复
+  const baseUrl = profile.baseUrl.trim().replace(/\/+$/, '').replace(/\/v1$/, '')
   const apiUrl = `${baseUrl}/v1beta/models/${model}:generateContent`
 
   // 构建请求体
