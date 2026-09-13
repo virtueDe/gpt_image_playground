@@ -17,6 +17,7 @@ export default function InputParamsPanel({
   setParams,
   activeProfile,
   isFalProvider,
+  isGeminiModel,
   isFalTextToImage,
   displaySize,
   qualityOptions,
@@ -57,6 +58,7 @@ export default function InputParamsPanel({
   setParams: (patch: Partial<TaskParams>) => void
   activeProfile: ApiProfile
   isFalProvider: boolean
+  isGeminiModel: boolean
   isFalTextToImage: boolean
   displaySize: string
   qualityOptions: Array<{ label: string; value: string }>
@@ -165,7 +167,7 @@ export default function InputParamsPanel({
           className={selectClass}
         />
       </label>
-      {showTransparentOutputControl && (
+      {!isGeminiModel && showTransparentOutputControl && (
         <label
           className="relative flex flex-col gap-0.5"
           onMouseEnter={transparentOutputHint.show}
@@ -199,7 +201,7 @@ export default function InputParamsPanel({
           />
         </label>
       )}
-      {!showTransparentOutputControl && (
+      {!isGeminiModel && !showTransparentOutputControl && (
         <label
           className="relative flex flex-col gap-0.5"
           onMouseEnter={compressionHint.show}
@@ -231,36 +233,38 @@ export default function InputParamsPanel({
           />
         </label>
       )}
-      <label
-        className="relative flex flex-col gap-0.5"
-        onMouseEnter={moderationHint.show}
-        onMouseLeave={moderationHint.hide}
-        onTouchStart={moderationHint.startTouch}
-        onTouchEnd={moderationHint.clearTimer}
-        onTouchCancel={moderationHint.hide}
-        onClick={moderationHint.show}
-      >
-        <span className="text-gray-400 dark:text-gray-500 ml-1">审核</span>
-        <Select
-          value={moderationDisabled ? 'auto' : params.moderation}
-          onChange={(val) => {
-            if (!moderationDisabled) setParams({ moderation: val as TaskParams['moderation'] })
-          }}
-          options={[
-            { label: 'auto', value: 'auto' },
-            { label: 'low', value: 'low' },
-          ]}
-          disabled={moderationDisabled}
-          showValueTooltips={false}
-          className={moderationDisabled
-            ? 'px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed text-xs transition-all duration-200 shadow-sm'
-            : selectClass}
-        />
-        <ButtonTooltip
-          visible={moderationDisabled && moderationHint.visible}
-          text="fal.ai 不支持审核参数"
-        />
-      </label>
+      {!isGeminiModel && (
+        <label
+          className="relative flex flex-col gap-0.5"
+          onMouseEnter={moderationHint.show}
+          onMouseLeave={moderationHint.hide}
+          onTouchStart={moderationHint.startTouch}
+          onTouchEnd={moderationHint.clearTimer}
+          onTouchCancel={moderationHint.hide}
+          onClick={moderationHint.show}
+        >
+          <span className="text-gray-400 dark:text-gray-500 ml-1">审核</span>
+          <Select
+            value={moderationDisabled ? 'auto' : params.moderation}
+            onChange={(val) => {
+              if (!moderationDisabled) setParams({ moderation: val as TaskParams['moderation'] })
+            }}
+            options={[
+              { label: 'auto', value: 'auto' },
+              { label: 'low', value: 'low' },
+            ]}
+            disabled={moderationDisabled}
+            showValueTooltips={false}
+            className={moderationDisabled
+              ? 'px-3 py-1.5 rounded-xl border border-gray-200/60 dark:border-white/[0.08] bg-gray-100/50 dark:bg-white/[0.05] opacity-50 cursor-not-allowed text-xs transition-all duration-200 shadow-sm'
+              : selectClass}
+          />
+          <ButtonTooltip
+            visible={moderationDisabled && moderationHint.visible}
+            text="fal.ai 不支持审核参数"
+          />
+        </label>
+      )}
       <label
         className="relative flex flex-col gap-0.5"
         onMouseEnter={() => { showAgentNHint(); streamConcurrentHint.show() }}

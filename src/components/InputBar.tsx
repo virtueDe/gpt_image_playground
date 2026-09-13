@@ -15,6 +15,7 @@ import { ALL_FAVORITES_COLLECTION_ID, getTaskFavoriteCollectionIds } from '../li
 import { getContentEditableCursor, getContentEditablePlainText, getContentEditableSelection, getMentionTagHtml, setContentEditableCursor, setContentEditableSelection, syncMentionTagSelection } from '../lib/contentEditableMentions'
 import { useHintTooltip } from '../hooks/useHintTooltip'
 import { downloadImageEntriesAsZip, downloadImageIds, formatExportFileTime, getTaskOutputImageZipEntries } from '../lib/downloadImages'
+import { isGeminiImageModel } from '../lib/geminiImageApi'
 import SizePickerModal from './SizePickerModal'
 import { CloseIcon, CollapseIcon, ExpandIcon } from './icons'
 import ButtonTooltip from './input/buttonTooltip'
@@ -462,6 +463,7 @@ export default function InputBar() {
   }, [setPrompt])
   const activeProvider = activeProfile.provider
   const isFalProvider = activeProvider === 'fal'
+  const isGeminiModel = isGeminiImageModel(activeProfile.model)
   const agentAutoImageCount = appMode === 'agent'
   const moderationDisabled = isFalProvider
   const transparentOutputAvailable = appMode === 'gallery'
@@ -1524,6 +1526,7 @@ export default function InputBar() {
       setParams={setParams}
       activeProfile={activeProfile}
       isFalProvider={isFalProvider}
+      isGeminiModel={isGeminiModel}
       isFalTextToImage={isFalTextToImage}
       displaySize={displaySize}
       qualityOptions={qualityOptions}
