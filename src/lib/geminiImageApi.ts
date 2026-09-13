@@ -22,6 +22,10 @@ interface GeminiGenerateContentRequest {
   generationConfig?: {
     candidateCount?: number
     responseMimeType?: string
+    imageConfig?: {
+      aspectRatio?: string
+      imageSize?: string
+    }
   }
 }
 
@@ -53,6 +57,48 @@ interface GeminiGenerateContentResponse {
 export function isGeminiImageModel(model: string): boolean {
   const normalized = model.trim().toLowerCase()
   return normalized.includes('gemini') && normalized.includes('image')
+}
+
+/**
+ * 将 OpenAI size 转换为 Gemini aspectRatio
+ * OpenAI: "1024x1024", "1792x1024", "1024x1792" 等
+ * Gemini: "1:1", "16:9", "9:16", "4:3", "3:4"
+ */
+function mapSizeToAspectRatio(size: string): string {
+  const match = size.match(/^(\d+)x(\d+)$/)
+  if (!match) return '1:1'
+
+  const width = Number.parseInt(match[1], 10)
+  const height = Number.parseInt(match[2], 10)
+
+  if (width === height) return '1:1'
+
+  const ratio = width / height
+  if (ratio >= 1.7) return '16:9'
+  if (ratio <= 0.6) return '9:16'
+  if (ratio >= 1.2) return '4:3'
+  if (ratio <= 0.8) return '3:4'
+
+  return '1:1'
+}
+
+/**
+ * 将 OpenAI quality 转换为 Gemini imageSize
+ * OpenAI: "auto", "low", "medium", "high"
+ * Gemini: "1K", "2K", "4K"
+ */
+function mapQualityToImageSize(quality: string): string {
+  switch (quality) {
+    case 'high':
+      return '4K'
+    case 'medium':
+    case 'auto':
+      return '2K'
+    case 'low':
+      return '1K'
+    default:
+      return '2K'
+  }
 }
 
 /**
@@ -100,6 +146,10 @@ function buildGeminiRequest(opts: CallApiOptions): GeminiGenerateContentRequest 
     generationConfig: {
       candidateCount: Math.max(1, opts.params.n || 1),
       responseMimeType: MIME_MAP[opts.params.output_format] || 'image/png',
+      imageConfig: {
+        aspectRatio: mapSizeToAspectRatio(opts.params.size),
+        imageSize: mapQualityToImageSize(opts.params.quality),
+      },
     },
   }
 
