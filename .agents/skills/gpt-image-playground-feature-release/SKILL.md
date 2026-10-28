@@ -64,7 +64,7 @@ full release diff. Historical entries in `RELEASE.md` remain unchanged.
 4. Push `main` and the tag. The tag triggers `.github/workflows/docker.yml`.
 5. The workflow builds this repository's own image
    `ghcr.io/virtuede/gpt_image_playground:<version>` and deploys it over SSH to
-   `deploy@186.244.245.86:/opt/proxy/studio` using the `studio` Compose service.
+   `deploy@108.186.198.20:/opt/proxy/studio` using the `studio` Compose service.
 6. Verify the workflow's build and deploy jobs separately. Confirm the remote
    `sub2api-studio` container uses the new image, is running, and `/studio/`
    returns a successful HTTP response.
@@ -74,10 +74,10 @@ preview infrastructure and is not evidence of a production release.
 
 ## Deployment secrets and stop conditions
 
-The workflow must use repository secrets for `DEPLOY_SSH_KEY`,
+The workflow must use repository secrets for `DEPLOY_HOST`, `DEPLOY_SSH_KEY`,
 `DEPLOY_KNOWN_HOSTS`, `GHCR_DEPLOY_USERNAME`, and `GHCR_DEPLOY_TOKEN`. The
-default target is `deploy@186.244.245.86:/opt/proxy/studio`; stop if the actual
-target differs or required secrets are missing.
+expected target is `deploy@108.186.198.20:/opt/proxy/studio`; stop if the actual
+target differs or required secrets are missing. `DEPLOY_HOST` has no fallback.
 
 Stop on dirty ambiguous scope, diverged `main`, failed required checks, a used
 tag, missing deployment secrets, failed image push, or failed remote health

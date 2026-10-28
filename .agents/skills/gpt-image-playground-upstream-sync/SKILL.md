@@ -42,7 +42,7 @@ merging to `main`, and production release are separate stages.
    files.
 3. Preserve the project image and deployment contract:
    `ghcr.io/virtuede/gpt_image_playground`,
-   `deploy@186.244.245.86:/opt/proxy/studio`, and the `studio` service.
+   `deploy@108.186.198.20:/opt/proxy/studio`, and the `studio` service.
 4. Run `npm ci`, `npm run build`, `npm test`, and `git diff --check` when the
    affected files permit. Failed required checks block integration unless the
    user explicitly accepts the named risk.
