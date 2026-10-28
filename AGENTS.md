@@ -172,7 +172,7 @@ else params = baseParams
 
 ### Studio 生产发布
 
-- Studio 生产环境是本项目自己的容器服务，不是 GitHub Pages；默认通过 SSH 部署到 `deploy@186.244.245.86:/opt/proxy/studio`。
+- Studio 生产环境是本项目自己的容器服务，不是 GitHub Pages；当前通过 SSH 部署到 `deploy@108.186.198.20:/opt/proxy/studio`。工作流必须显式配置 `DEPLOY_HOST` Secret，缺失时终止部署，不使用服务器 IP 兜底。
 - 版本使用 `MAJOR.MINOR.PATCH-studio.N`，同一基础版本的 Studio 发布递增 `N`，例如 `0.7.8-studio.3` -> `0.7.8-studio.4`。
 - 正式发布必须从干净且已同步的 `main` 创建带注释标签 `v<package.json version>`。推送标签后，`.github/workflows/docker.yml` 构建本项目自己的 `ghcr.io/virtuede/gpt_image_playground:<version>` 镜像，并通过 SSH 更新 Studio 容器。
 - 生产部署目录固定为 `/opt/proxy/studio`，Compose 服务为 `studio`，容器名为 `sub2api-studio`。不得将上游或其他仓库镜像作为本项目生产镜像。
