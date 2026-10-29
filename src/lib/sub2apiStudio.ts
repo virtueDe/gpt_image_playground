@@ -84,6 +84,7 @@ function createStudioProfile(
     id,
     name,
     provider: 'sb2api-async',
+    studioGroupPlatform: platform === 'gemini' || platform === 'grok' ? platform : 'openai',
     baseUrl,
     apiKey,
     model: '',
@@ -183,6 +184,9 @@ export function buildSub2APIStudioSettings(
 export function stripSub2APIStudioProfileKeys(settings: AppSettings): AppSettings {
   return {
     ...settings,
+    apiKey: settings.profiles.some((profile) => isSub2APIStudioProfile(profile) && profile.apiKey === settings.apiKey)
+      ? ''
+      : settings.apiKey,
     profiles: settings.profiles.map((profile) => (
       isSub2APIStudioProfile(profile) ? { ...profile, apiKey: '' } : profile
     )),

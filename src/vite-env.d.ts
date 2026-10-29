@@ -14,6 +14,10 @@ interface ImportMetaEnv {
   readonly VITE_PREVENT_PRESET_CONFIG_DELETION?: string
   readonly VITE_SUB2API_STUDIO_MODE?: string
   readonly VITE_SHOW_DEFAULT_CONFIG_ONLY?: string
+  readonly VITE_DEFAULT_UI_FONT?: string
+  readonly VITE_DEFAULT_MONO_FONT?: string
+  readonly VITE_BUILTIN_FONT_SOURCE?: string
+  readonly VITE_WEB_APP_URL?: string
 }
 
 interface ImportMeta {

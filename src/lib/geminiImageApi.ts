@@ -3,268 +3,109 @@ import {
   assertImageInputPayloadSize,
   type CallApiOptions,
   type CallApiResult,
-  fetchImageUrlAsDataUrl,
+  createRequestTimeoutError,
   getApiErrorMessage,
-  isDataUrl,
-  isHttpUrl,
-  MIME_MAP,
   normalizeBase64Image,
 } from './imageApiShared'
+import { apiFetch } from './platform'
 
-/**
- * Gemini v1beta GenerateContent API 请求格式
- */
-interface GeminiGenerateContentRequest {
-  contents: Array<{
-    role: 'user'
-    parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>
-  }>
-  generationConfig?: {
-    candidateCount?: number
-    responseMimeType?: string
-    imageConfig?: {
-      aspectRatio?: string
-      imageSize?: string
-    }
-  }
-}
-
-/**
- * Gemini v1beta GenerateContent API 响应格式
- */
-interface GeminiGenerateContentResponse {
+interface GeminiResponse {
   candidates?: Array<{
-    content?: {
-      parts?: Array<{
-        text?: string
-        inlineData?: {
-          mimeType: string
-          data: string
-        }
-      }>
-    }
+    finishReason?: string
+    content?: { parts?: Array<{
+      text?: string
+      thought?: boolean
+      inlineData?: { mimeType?: string; data?: string }
+    }> }
   }>
-  error?: {
-    code: number
-    message: string
-    status?: string
-  }
+  promptFeedback?: { blockReason?: string }
+  error?: { message?: string }
 }
 
-/**
- * 判断是否为 Gemini 图像生成模型
- */
-export function isGeminiImageModel(model: string): boolean {
-  const normalized = model.trim().toLowerCase()
-  return normalized.includes('gemini') && normalized.includes('image')
-}
+export async function callGeminiImageApi(opts: CallApiOptions, profile: ApiProfile): Promise<CallApiResult> {
+  const model = profile.model.trim().replace(/^models\//, '')
+  if (!model) throw new Error('请选择 Gemini 生图模型')
+  if (opts.maskDataUrl) throw new Error('Gemini 原生接口不支持遮罩编辑，请移除遮罩并通过参考图和提示词描述修改区域')
 
-/**
- * 将 OpenAI size 转换为 Gemini aspectRatio
- * OpenAI: "1024x1024", "1792x1024", "1024x1792" 等
- * Gemini: "1:1", "16:9", "9:16", "4:3", "3:4"
- */
-function mapSizeToAspectRatio(size: string): string {
-  const match = size.match(/^(\d+)x(\d+)$/)
-  if (!match) return '1:1'
-
-  const width = Number.parseInt(match[1], 10)
-  const height = Number.parseInt(match[2], 10)
-
-  if (width === height) return '1:1'
-
-  const ratio = width / height
-  if (ratio >= 1.7) return '16:9'
-  if (ratio <= 0.6) return '9:16'
-  if (ratio >= 1.2) return '4:3'
-  if (ratio <= 0.8) return '3:4'
-
-  return '1:1'
-}
-
-/**
- * 将 OpenAI quality 转换为 Gemini imageSize
- * OpenAI: "auto", "low", "medium", "high"
- * Gemini: "1K", "2K", "4K"
- */
-function mapQualityToImageSize(quality: string): string {
-  switch (quality) {
-    case 'high':
-      return '4K'
-    case 'medium':
-    case 'auto':
-      return '2K'
-    case 'low':
-      return '1K'
-    default:
-      return '2K'
-  }
-}
-
-/**
- * 构建 Gemini v1beta API 请求体
- */
-function buildGeminiRequest(opts: CallApiOptions): GeminiGenerateContentRequest {
-  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = []
-
-  // 添加文本提示词
-  parts.push({ text: opts.prompt })
-
-  // 添加输入图片（如果有）
-  for (const imageDataUrl of opts.inputImageDataUrls) {
-    const match = imageDataUrl.match(/^data:([^;]+);base64,(.+)$/)
-    if (match) {
-      parts.push({
-        inlineData: {
-          mimeType: match[1] || 'image/png',
-          data: match[2],
-        },
-      })
-    }
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [{ text: opts.prompt }]
+  for (const dataUrl of opts.inputImageDataUrls) {
+    const match = dataUrl.match(/^data:(image\/[\w.+-]+);base64,([\s\S]+)$/)
+    if (!match) throw new Error('Gemini 参考图必须是有效的 Base64 图片')
+    parts.push({ inlineData: { mimeType: match[1], data: match[2] } })
   }
 
-  // 添加遮罩图片（如果有）
-  if (opts.maskDataUrl) {
-    const match = opts.maskDataUrl.match(/^data:([^;]+);base64,(.+)$/)
-    if (match) {
-      parts.push({
-        inlineData: {
-          mimeType: match[1] || 'image/png',
-          data: match[2],
-        },
-      })
-    }
-  }
-
-  const request: GeminiGenerateContentRequest = {
-    contents: [
-      {
-        role: 'user',
-        parts,
-      },
-    ],
-    generationConfig: {
-      candidateCount: Math.max(1, opts.params.n || 1),
-      responseMimeType: MIME_MAP[opts.params.output_format] || 'image/png',
-      imageConfig: {
-        aspectRatio: mapSizeToAspectRatio(opts.params.size),
-        imageSize: mapQualityToImageSize(opts.params.quality),
-      },
-    },
-  }
-
-  return request
-}
-
-/**
- * 解析 Gemini v1beta API 响应
- */
-async function parseGeminiResponse(
-  response: GeminiGenerateContentResponse,
-  params: TaskParams,
-): Promise<CallApiResult> {
-  // 检查错误
-  if (response.error) {
-    throw new Error(`Gemini API 错误：${response.error.message}`)
-  }
-
-  const mime = MIME_MAP[params.output_format] || 'image/png'
-  const images: string[] = []
-  const rawImageUrls: string[] = []
-
-  // 提取图片数据
-  if (response.candidates) {
-    for (const candidate of response.candidates) {
-      const parts = candidate.content?.parts || []
-      for (const part of parts) {
-        if (part.inlineData?.data) {
-          // Base64 编码的图片数据
-          const dataUrl = normalizeBase64Image(part.inlineData.data, part.inlineData.mimeType || mime)
-          images.push(dataUrl)
-        }
-      }
-    }
-  }
-
-  if (images.length === 0) {
-    throw new Error('Gemini API 未返回图片数据')
-  }
-
-  return {
-    images,
-    actualParams: undefined,
-    actualParamsList: images.map(() => undefined),
-    revisedPrompts: images.map(() => undefined),
-    ...(rawImageUrls.length ? { rawImageUrls } : {}),
-  }
-}
-
-/**
- * 调用 Gemini v1beta GenerateContent API 生成图片
- */
-export async function callGeminiImageApi(
-  opts: CallApiOptions,
-  profile: ApiProfile,
-): Promise<CallApiResult> {
-  const model = profile.model.trim() || 'gemini-3-pro-image-preview'
-
-  // 构建完整的 API URL
-  // sub2api 格式：POST /v1beta/models/{model}:generateContent
-  // 注意：baseUrl 可能已经包含 /v1，需要移除避免重复
-  const baseUrl = profile.baseUrl.trim().replace(/\/+$/, '').replace(/\/v1$/, '')
-  const apiUrl = `${baseUrl}/v1beta/models/${model}:generateContent`
-
-  // 构建请求体
-  const requestBody = buildGeminiRequest(opts)
-
-  // 验证输入大小
-  const requestBodySize = new Blob([JSON.stringify(requestBody)]).size
-  assertImageInputPayloadSize(requestBodySize)
-
-  // 发送请求
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
-
-  try {
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${profile.apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
+  const imageConfig: { aspectRatio?: string; imageSize?: string } = {}
+  const size = opts.params.size.match(/^(\d+)x(\d+)$/)
+  if (size && Number(size[1]) > 0 && Number(size[2]) > 0) {
+    const ratio = Number(size[1]) / Number(size[2])
+    const ratios = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
+    imageConfig.aspectRatio = ratios.reduce((best, item) => {
+      const [w, h] = item.split(':').map(Number)
+      const [bw, bh] = best.split(':').map(Number)
+      return Math.abs(Math.log(ratio / (w / h))) < Math.abs(Math.log(ratio / (bw / bh))) ? item : best
     })
+  }
+  // Flash 2.5 只支持固定分辨率；auto 交由模型选择默认输出尺寸。
+  if (!model.toLowerCase().includes('gemini-2.5-flash-image') && opts.params.quality !== 'auto') {
+    imageConfig.imageSize = opts.params.quality === 'low' ? '1K' : opts.params.quality === 'medium' ? '2K' : '4K'
+  }
+  const body = JSON.stringify({
+    contents: [{ role: 'user', parts }],
+    generationConfig: {
+      responseModalities: ['TEXT', 'IMAGE'],
+      ...(Object.keys(imageConfig).length ? { imageConfig } : {}),
+    },
+  })
+  assertImageInputPayloadSize(new Blob([body]).size)
+  const baseUrl = profile.baseUrl.trim().replace(/\/+$/, '').replace(/\/v1(?:beta)?$/, '')
+  const url = `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent`
+  const n = Math.min(10, Math.max(1, Math.floor(opts.params.n) || 1))
 
-    clearTimeout(timeoutId)
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '')
-      let errorMessage = `Gemini API 请求失败：HTTP ${response.status}`
-
-      try {
-        const errorJson = JSON.parse(errorText) as GeminiGenerateContentResponse
-        if (errorJson.error?.message) {
-          errorMessage = `Gemini API 错误：${errorJson.error.message}`
-        }
-      } catch {
-        if (errorText) {
-          errorMessage += `\n${errorText.slice(0, 200)}`
-        }
+  // Gemini 的多图数量通过独立请求实现，单张失败仍保留其他请求的结果。
+  const results = await Promise.allSettled(Array.from({ length: n }, async () => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(createRequestTimeoutError(profile.timeout)), profile.timeout * 1000)
+    try {
+      const response = await apiFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': profile.apiKey },
+        body,
+        signal: controller.signal,
+      })
+      if (!response.ok) throw new Error(await getApiErrorMessage(response))
+      const payload = await response.json() as GeminiResponse
+      if (payload.error) throw new Error(payload.error.message || 'Gemini API 请求失败')
+      const imageParts = (payload.candidates ?? []).flatMap((candidate) => candidate.content?.parts ?? [])
+        .filter((part) => !part.thought && part.inlineData?.mimeType?.startsWith('image/') && part.inlineData.data)
+      if (!imageParts.length) {
+        const reason = payload.promptFeedback?.blockReason || (payload.candidates ?? [])
+          .flatMap((candidate) => [candidate.finishReason, ...(candidate.content?.parts ?? []).map((part) => part.text)])
+          .filter(Boolean).join('；')
+        throw new Error(`Gemini 未返回图片${reason ? `：${reason}` : ''}`)
       }
-
-      throw new Error(errorMessage)
+      return imageParts.map((part) => {
+        const format = part.inlineData!.mimeType!.split('/')[1]
+        const params: Partial<TaskParams> = format === 'png' || format === 'jpeg' || format === 'webp'
+          ? { output_format: format }
+          : {}
+        return { image: normalizeBase64Image(part.inlineData!.data!, part.inlineData!.mimeType!), params }
+      })
+    } catch (err) {
+      if (controller.signal.aborted) throw controller.signal.reason
+      throw err
+    } finally {
+      clearTimeout(timer)
     }
-
-    const responseData = await response.json() as GeminiGenerateContentResponse
-    return await parseGeminiResponse(responseData, opts.params)
-  } catch (err) {
-    clearTimeout(timeoutId)
-
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error(`Gemini API 请求超时：超过 ${profile.timeout} 秒仍未完成`)
-    }
-
-    throw err
+  }))
+  const outputs = results.flatMap((result) => result.status === 'fulfilled' ? result.value : [])
+  if (!outputs.length) throw (results.find((result) => result.status === 'rejected') as PromiseRejectedResult).reason
+  const failedRequests = results.flatMap((result, requestIndex) => result.status === 'rejected'
+    ? [{ requestIndex, error: result.reason instanceof Error ? result.reason.message : String(result.reason) }]
+    : [])
+  return {
+    images: outputs.map((item) => item.image),
+    actualParams: { n: outputs.length, ...outputs[0].params },
+    actualParamsList: outputs.map((item) => item.params),
+    ...(failedRequests.length ? { failedRequests } : {}),
   }
 }

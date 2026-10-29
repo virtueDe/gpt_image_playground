@@ -19,9 +19,14 @@ export default function StudioApiBar() {
       return
     }
     const controller = new AbortController()
+    const previousModel = activeProfile.selectedModel || activeProfile.model
+    setModels([])
     setModelsLoading(true)
     setModelsError('')
-    const modelsUrl = `${activeProfile.baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '')}/v1/models`
+    setSettings({ profiles: useStore.getState().settings.profiles.map((profile) => profile.id === activeProfile.id
+      ? { ...profile, model: '', selectedModel: previousModel }
+      : profile) })
+    const modelsUrl = `${activeProfile.baseUrl.replace(/\/+$/, '').replace(/\/v1(?:beta)?$/, '')}/v1/models`
     fetch(modelsUrl, {
       headers: { Accept: 'application/json', Authorization: `Bearer ${activeProfile.apiKey}` },
       signal: controller.signal,
@@ -29,39 +34,36 @@ export default function StudioApiBar() {
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         const payload = await response.json() as { data?: Array<{ id?: string }> }
+        if (controller.signal.aborted) return
         const nextModels = Array.isArray(payload.data)
-          ? payload.data.map((item) => item.id?.trim()).filter((id): id is string => !!id)
+          ? [...new Set(payload.data.flatMap((item) => typeof item.id === 'string' && item.id.trim() ? [item.id.trim()] : []))]
           : []
         setModels(nextModels)
-        if (nextModels.length && !nextModels.includes(activeProfile.model)) {
-          setSettings({
-            profiles: settings.profiles.map((profile) => profile.id === activeProfile.id
-              ? { ...profile, model: nextModels[0], providerDrafts: {
-                ...profile.providerDrafts,
-                'sb2api-async': { ...profile.providerDrafts?.['sb2api-async'], model: nextModels[0] },
-              } }
-              : profile),
-          })
-        }
+        setSettings({
+          profiles: useStore.getState().settings.profiles.map((profile) => {
+            if (profile.id !== activeProfile.id) return profile
+            const selected = profile.selectedModel || previousModel
+            const model = nextModels.includes(selected) ? selected : nextModels[0] ?? ''
+            return { ...profile, model: nextModels.join(', '), selectedModel: model }
+          }),
+        })
       })
       .catch((error: unknown) => {
-        if ((error as Error).name !== 'AbortError') {
-          setModels([])
-          setModelsError('模型列表获取失败')
-        }
+        if (controller.signal.aborted) return
+        console.warn('主站模型列表获取失败：', error)
+        setModels([])
+        setModelsError(`模型列表获取失败：${error instanceof Error ? error.message : String(error)}`)
       })
-      .finally(() => setModelsLoading(false))
+      .finally(() => {
+        if (!controller.signal.aborted) setModelsLoading(false)
+      })
     return () => controller.abort()
-  }, [activeProfile?.id, activeProfile?.apiKey, activeProfile?.baseUrl])
+  }, [activeProfile?.id, activeProfile?.apiKey, activeProfile?.baseUrl, activeProfile?.studioGroupPlatform, activeProfile?.provider, setSettings])
 
   const updateModel = (model: string | number) => {
-    const nextModel = String(model)
     setSettings({
-      profiles: settings.profiles.map((profile) => profile.id === activeProfile?.id
-        ? { ...profile, model: nextModel, providerDrafts: {
-          ...profile.providerDrafts,
-          'sb2api-async': { ...profile.providerDrafts?.['sb2api-async'], model: nextModel },
-        } }
+      profiles: useStore.getState().settings.profiles.map((profile) => profile.id === activeProfile?.id
+        ? { ...profile, selectedModel: String(model) }
         : profile),
     })
   }
@@ -82,7 +84,7 @@ export default function StudioApiBar() {
         <label className="min-w-0">
           <span className="mb-1 block text-xs text-gray-400 dark:text-gray-500">主站图片模型</span>
           <Select
-            value={activeProfile?.model ?? ''}
+            value={activeProfile?.selectedModel ?? ''}
             onChange={updateModel}
             options={models.map((model) => ({ label: model, value: model }))}
             disabled={!activeProfile || modelsLoading || !models.length}
