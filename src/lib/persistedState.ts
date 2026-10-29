@@ -1,14 +1,15 @@
-import type { AgentConversation, AgentInputDraft, AppMode, AppSettings, FavoriteCollection, InputImage, MaskDraft, TaskParams } from '../types'
-import { normalizeSettings } from './apiProfiles'
+import type { AgentConversation, AgentInputDraft, AppMode, AppSettings, FavoriteCollection, InputImage, MaskDraft, PresetConfig, TaskParams } from '../types'
+import { normalizePresetAgent, normalizeSettings } from './apiProfiles'
 import { normalizeAgentConversations } from './agentConversationState'
 import { ensureDefaultFavoriteCollection, normalizeFavoriteCollections, resolveDefaultFavoriteCollectionId } from './favoriteState'
 import { cleanStaleAgentInputDrafts, getPersistableAgentInputDrafts, isEmptyAgentInputDraft, normalizeAgentInputDraft, normalizeAgentInputDrafts, normalizeAgentInputDraftsByKey, saveGalleryInputDraft } from './inputDraftState'
 import { getPersistableAgentConversations, stripPersistedAgentConversations } from './agentResponseState'
 import { stripSub2APIStudioProfileKeys } from './sub2apiStudio'
+import { isHttpUrl } from './imageApiShared'
 
 export interface PersistedAppState {
   settings: AppSettings
-  previousPresetConfig?: Pick<AppSettings, 'customProviders' | 'profiles'> | null
+  previousPresetConfig?: PresetConfig | null
   dismissedPresetProfileIds?: string[]
   dismissedPresetProviderIds?: string[]
   params: TaskParams
@@ -28,6 +29,7 @@ export interface PersistedAppState {
   supportPromptDismissed: boolean
   supportPromptOpen: boolean
   supportPromptSkippedForImportedData: boolean
+  imageSourceUrls: Record<string, string>
 }
 
 type PersistedStateSource = Omit<PersistedAppState, 'prompt' | 'inputImages' | 'agentConversations'> & {
@@ -46,7 +48,7 @@ type PersistedStateFallback = Pick<
 }
 
 export type NormalizedPersistedAppState = PersistedAppState & {
-  previousPresetConfig: Pick<AppSettings, 'customProviders' | 'profiles'> | null
+  previousPresetConfig: PresetConfig | null
   dismissedPresetProfileIds: string[]
   dismissedPresetProviderIds: string[]
   prompt: string
@@ -77,7 +79,9 @@ function normalizeParams(value: unknown, fallback: TaskParams): TaskParams {
   if (!isRecord(value)) return fallback
   return {
     size: typeof value.size === 'string' ? value.size : fallback.size,
-    quality: value.quality === 'auto' || value.quality === 'low' || value.quality === 'medium' || value.quality === 'high' ? value.quality : fallback.quality,
+    quality: value.quality === 'auto' || value.quality === 'low' || value.quality === 'medium' || value.quality === 'high' || value.quality === 'xhigh' || value.quality === 'max'
+      ? value.quality
+      : fallback.quality,
     output_format: value.output_format === 'png' || value.output_format === 'jpeg' || value.output_format === 'webp' ? value.output_format : fallback.output_format,
     output_compression: value.output_compression === null || (typeof value.output_compression === 'number' && Number.isFinite(value.output_compression))
       ? value.output_compression
@@ -121,6 +125,7 @@ export function createPersistedState(state: PersistedStateSource, includeLegacyA
     supportPromptDismissed: state.supportPromptDismissed,
     supportPromptOpen: state.supportPromptOpen,
     supportPromptSkippedForImportedData: state.supportPromptSkippedForImportedData,
+    imageSourceUrls: state.imageSourceUrls,
   }
 }
 
@@ -143,9 +148,11 @@ export function normalizePersistedState(
   const previousPresetConfig = isRecord(persistedState.previousPresetConfig) && Array.isArray(persistedState.previousPresetConfig.profiles)
     ? (() => {
         const normalized = normalizeSettings(persistedState.previousPresetConfig)
+        const agent = normalizePresetAgent(persistedState.previousPresetConfig.agent, normalized.profiles)
         return {
           customProviders: normalized.customProviders,
           profiles: persistedState.previousPresetConfig.profiles.length ? normalized.profiles : [],
+          ...(agent ? { agent } : {}),
         }
       })()
     : null
@@ -215,6 +222,9 @@ export function normalizePersistedState(
       supportPromptDismissed: Boolean(persistedState.supportPromptDismissed),
       supportPromptOpen: Boolean(persistedState.supportPromptOpen),
       supportPromptSkippedForImportedData: Boolean(persistedState.supportPromptSkippedForImportedData),
+      imageSourceUrls: isRecord(persistedState.imageSourceUrls)
+        ? Object.fromEntries(Object.entries(persistedState.imageSourceUrls).filter((entry): entry is [string, string] => isHttpUrl(entry[1])))
+        : {},
       prompt: restoredAgentDraft ? restoredAgentDraft.prompt : galleryInputDraft?.prompt ?? '',
       inputImages: restoredAgentDraft ? restoredAgentDraft.inputImages : galleryInputDraft?.inputImages ?? [],
       maskDraft: restoredAgentDraft ? restoredAgentDraft.maskDraft : galleryInputDraft?.maskDraft ?? null,
