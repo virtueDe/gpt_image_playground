@@ -4,8 +4,9 @@
 // 以及 npm ls --omit=dev 列出的前端依赖。
 // 需要 cargo-about：cargo install cargo-about --version 0.9.2 --locked --features cli
 import { execFileSync, execSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 const OUT = 'src/assets/third-party-notices.txt'
 const RULE = '='.repeat(80)
@@ -45,11 +46,18 @@ section('Lobe Icons（设置中 Claude Code、Codex 的图标）', [
 
 // Rust：按许可原文分组，每组列出使用它的包；本项目自己的包（没有 source）不列出
 let about
+const aboutDir = mkdtempSync(join(tmpdir(), 'gpt-image-notices-'))
+const aboutPath = join(aboutDir, 'licenses.json')
 try {
-  about = JSON.parse(execFileSync('cargo', ['about', 'generate', '--format', 'json', '--manifest-path', 'src-tauri/Cargo.toml', '--config', 'src-tauri/about.toml', '--locked', '--fail'], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }))
+  // cargo-about 在 PowerShell 进程树下要求写入文件，以避免管道改变 UTF-8 编码。
+  execFileSync('cargo', ['about', 'generate', '--format', 'json', '--manifest-path', 'src-tauri/Cargo.toml', '--config', 'src-tauri/about.toml', '--locked', '--fail', '--output-file', aboutPath], { stdio: 'inherit' })
+  about = JSON.parse(readFileSync(aboutPath, 'utf8'))
 } catch (err) {
   console.error('cargo about 运行失败。未安装时请先运行：cargo install cargo-about --version 0.9.2 --locked --features cli')
   throw err
+} finally {
+  if (existsSync(aboutPath)) unlinkSync(aboutPath)
+  rmdirSync(aboutDir)
 }
 const rust = []
 const rustSeen = new Set()
@@ -95,5 +103,5 @@ if (missing.length) {
 section(`前端依赖（共 ${npm.size} 个包）`, [...npm.keys()].sort().map((k) => npm.get(k)).join('\n\n'))
 
 mkdirSync('src/assets', { recursive: true })
-writeFileSync(OUT, `${parts.join('\n')}\n`)
+writeFileSync(OUT, `${parts.join('\n').replace(/[ \t]+$/gm, '')}\n`)
 console.log(`已生成 ${OUT}：Rust 依赖 ${rustSeen.size} 个、前端依赖 ${npm.size} 个。`)
