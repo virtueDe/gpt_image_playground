@@ -816,7 +816,7 @@ export default function AgentWorkspace() {
                       <article 
                         className={`relative flex min-w-[16rem] max-w-full flex-col rounded-2xl p-4 transition-all duration-200 ${
                         isAssistant 
-                          ? 'bg-black/[0.04] dark:bg-white/[0.06] border border-transparent rounded-tl-sm hover:bg-black/[0.07] dark:hover:bg-white/[0.08]' 
+                          ? 'bg-black/[0.04] dark:bg-white/[0.06] border border-transparent rounded-tl-sm hover:bg-black/[0.07] dark:hover:bg-white/[0.08]'
                           : `bg-gray-100 dark:bg-[#2A2D31] rounded-tr-sm ${isEditing ? 'ring-2 ring-blue-500/50 dark:ring-blue-400/50' : ''}`
                       }`}
                       >
